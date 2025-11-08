@@ -1,9 +1,19 @@
 org 0x0000
 
 start:
+    cli
+    mov ax, 0x1000
+    mov ds, ax
+    mov es, ax
+    mov ss, ax
+    mov sp, 0xFFFE
+    sti
+
     mov si, msg
     call print_string
-    jmp $
+
+hang:
+    jmp hang
 
 print_string:
     mov ah, 0x0E
@@ -16,4 +26,4 @@ print_string:
 .done:
     ret
 
-msg db "8088/OS Kernel Loaded!", 0
+msg db "8088/OS Kernel Initialized", 0
