@@ -174,13 +174,25 @@ enable_irq1:
 ; Load Shell from Disk (sector 3)
 ; -------------------------------
 load_shell:
-    mov ax, 0x0201
-    mov bx, 0x0000
-    mov cx, 0x0003
-    mov dx, 0x0000
-    mov ax, 0x2000
+    push ax
+    push bx
+    push cx
+    push dx
+    push es
+
+    mov ax, 0x0201        ; INT 13h: read 1 sector
+    mov bx, 0x0000        ; offset in ES
+    mov cx, 0x0003        ; sector 3
+    mov dx, 0x0000        ; head 0, drive 0
+    mov ax, 0x2000        ; segment for shell
     mov es, ax
     int 0x13
+
+    pop es
+    pop dx
+    pop cx
+    pop bx
+    pop ax
     ret
 
 ; -------------------------------
