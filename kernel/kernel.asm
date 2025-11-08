@@ -12,6 +12,7 @@ start:
     call enable_irq0
     call install_keyboard_handler
     call enable_irq1
+    call install_syscall_handler
 
     sti
 
@@ -28,8 +29,8 @@ timer_handler:
     push ax
     push dx
 
-    mov dx, 0x3F8         ; COM1 port (optional debug output)
-    mov al, '.'           ; Send a dot to serial port
+    mov dx, 0x3F8
+    mov al, '.'
     out dx, al
 
     pop dx
@@ -45,23 +46,54 @@ keyboard_handler:
     push cx
     push dx
 
-    in al, 0x60           ; Read scancode
+    in al, 0x60
     cmp al, 58
-    ja .done              ; Ignore scancodes beyond table
+    ja .done
 
     mov bx, ax
     mov si, scancode_table
     xor ah, ah
-    mov al, [si + bx]     ; Translate to ASCII
+    mov al, [si + bx]
     cmp al, 0
-    je .done              ; Skip non-printables
+    je .done
 
-    call buffer_put       ; Store in ring buffer
+    call buffer_put
 
 .done:
     mov al, 0x20
-    out 0x20, al          ; Send EOI to PIC
+    out 0x20, al
 
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    iret
+
+; -------------------------------
+; System Call Handler (INT 60h)
+; -------------------------------
+syscall_handler:
+    push ax
+    push bx
+    push cx
+    push dx
+
+    cmp ah, 0x01
+    je .get_char
+    cmp ah, 0x02
+    je .print_char
+    jmp .done
+
+.get_char:
+    call buffer_get
+    jmp .done
+
+.print_char:
+    mov ah, 0x0E
+    int 0x10
+    jmp .done
+
+.done:
     pop dx
     pop cx
     pop bx
@@ -93,6 +125,20 @@ install_keyboard_handler:
 
     mov word [0x0024], keyboard_handler
     mov word [0x0026], cs
+    sti
+    ret
+
+; -------------------------------
+; Install System Call Handler (INT 60h)
+; -------------------------------
+install_syscall_handler:
+    cli
+    mov ax, cs
+    mov ds, ax
+    mov es, ax
+
+    mov word [0x0180], syscall_handler
+    mov word [0x0182], cs
     sti
     ret
 
@@ -155,7 +201,7 @@ buffer_put:
     xor bx, bx
 .skip_wrap:
     cmp bx, cx
-    je .full              ; Buffer full, drop character
+    je .full
 
     mov si, keyboard_buffer
     add si, [buffer_head]
@@ -180,7 +226,7 @@ buffer_get:
 
     mov bx, [buffer_tail]
     cmp bx, [buffer_head]
-    je .empty             ; Buffer empty
+    je .empty
 
     mov si, keyboard_buffer
     add si, bx
@@ -194,7 +240,7 @@ buffer_get:
     jmp .done
 
 .empty:
-    mov al, 0             ; Return null if empty
+    mov al, 0
 
 .done:
     pop dx
