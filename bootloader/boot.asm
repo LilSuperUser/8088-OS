@@ -8,11 +8,13 @@ start:
     mov ss, ax
     mov sp, 0x7C00
 
-    mov bx, 0x0000        ; Offset in ES
-    mov ax, 0x0201        ; INT 13h: Read 1 sector
-    mov cx, 0x0002        ; Cylinder 0, Sector 2
-    mov dx, 0x0000        ; Head 0, Drive 0 (floppy)
+    mov ax, 0x0202        ; INT 13h: read 2 sectors
+    mov cx, 0x0002        ; Start at sector 2
+    mov dx, 0x0000        ; Head 0, Drive 0
+    mov bx, 0x0000
+    mov es, 0x1000
     int 0x13
+
     jc disk_error         ; Jump if carry set (error)
 
     jmp 0x1000:0000       ; Jump to kernel
