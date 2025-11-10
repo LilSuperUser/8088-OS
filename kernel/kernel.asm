@@ -28,15 +28,14 @@ hang:
 ; -------------------------------
 ; Timer Interrupt Handler (INT 08h)
 ; -------------------------------
+tick_count dw 0
+
 timer_handler:
     push ax
-    push dx
-
+    inc word [tick_count]
     mov dx, 0x3F8
     mov al, '.'
     out dx, al
-
-    pop dx
     pop ax
     iret
 
@@ -80,6 +79,8 @@ syscall_handler:
     push bx
     push cx
     push dx
+    push si
+    push di
 
     cmp ah, 0x01
     je .get_char
@@ -87,6 +88,14 @@ syscall_handler:
     je .print_char
     cmp ah, 0x03
     je .malloc_syscall
+    cmp ah, 0x04
+    je .read_line
+    cmp ah, 0x05
+    je .clear_screen
+    cmp ah, 0x06
+    je .get_time
+    cmp ah, 0x07
+    je .exec
     jmp .done
 
 .get_char:
@@ -100,10 +109,64 @@ syscall_handler:
 
 .malloc_syscall:
     call malloc
-    ; ES:DI contains pointer to allocated block
     jmp .done
 
+.read_line:
+    xor cx, cx
+.next_char:
+    call buffer_get
+    cmp al, 0
+    je .next_char
+    cmp al, 13
+    je .done_read
+    cmp cx, bx
+    jae .done_read
+    stosb
+    inc cx
+    jmp .next_char
+.done_read:
+    mov al, cl
+    jmp .done
+
+.clear_screen:
+    mov ax, 0x0600
+    mov bh, 0x07
+    mov cx, 0x0000
+    mov dx, 0x184F
+    int 0x10
+    jmp .done
+
+.get_time:
+    mov ax, [tick_count]
+    jmp .done
+
+.exec:
+    push ax
+    push bx
+    push cx
+    push dx
+    push es
+
+    mov bx, 0x0000
+    mov cx, ax
+    add cx, 3
+    mov dx, 0x0000
+    mov ax, 0x3000
+    mov es, ax
+    mov ax, 0x0201
+    int 0x13
+
+    pop es
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+
+    jmp 0x3000:0000
+
 .done:
+    pop di
+    pop si
     pop dx
     pop cx
     pop bx
@@ -118,8 +181,7 @@ install_timer_handler:
     mov ax, cs
     mov ds, ax
     mov es, ax
-
-    mov word [0x0020], timer_handler
+    mov word [0x0000*4 + 0], timer_handler
     mov word [0x0022], cs
     sti
     ret
@@ -132,7 +194,6 @@ install_keyboard_handler:
     mov ax, cs
     mov ds, ax
     mov es, ax
-
     mov word [0x0024], keyboard_handler
     mov word [0x0026], cs
     sti
@@ -146,7 +207,6 @@ install_syscall_handler:
     mov ax, cs
     mov ds, ax
     mov es, ax
-
     mov word [0x0180], syscall_handler
     mov word [0x0182], cs
     sti
@@ -171,7 +231,7 @@ enable_irq1:
     ret
 
 ; -------------------------------
-; Load Shell from Disk (sector 3)
+; Load Shell from Disk (sector 5)
 ; -------------------------------
 load_shell:
     push ax
@@ -180,11 +240,11 @@ load_shell:
     push dx
     push es
 
-    mov ax, 0x0201        ; INT 13h: read 1 sector
-    mov bx, 0x0000        ; offset in ES
-    mov cx, 0x0003        ; sector 3
-    mov dx, 0x0000        ; head 0, drive 0
-    mov ax, 0x2000        ; segment for shell
+    mov ax, 0x0201
+    mov bx, 0x0000
+    mov cx, 0x0005
+    mov dx, 0x0000
+    mov ax, 0x2000
     mov es, ax
     int 0x13
 
@@ -224,9 +284,6 @@ keyboard_buffer: times buffer_size db 0
 buffer_head: dw 0
 buffer_tail: dw 0
 
-; -------------------------------
-; Put Character in Buffer
-; -------------------------------
 buffer_put:
     push ax
     push bx
@@ -256,9 +313,6 @@ buffer_put:
     pop ax
     ret
 
-; -------------------------------
-; Get Character from Buffer
-; -------------------------------
 buffer_get:
     push ax
     push bx
@@ -296,8 +350,6 @@ buffer_get:
 free_segment dw 0x3000
 free_offset  dw 0x0000
 
-; Input: BX = size in bytes
-; Output: ES:DI = pointer to allocated block
 malloc:
     push ax
     push bx
@@ -335,4 +387,4 @@ scancode_table:
 ; -------------------------------
 ; Boot Message
 ; -------------------------------
-msg db "8088/OS Kernel Initialized", 0
+msg db "8088/OS Kernel Initialized", 
