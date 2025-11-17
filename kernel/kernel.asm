@@ -35,9 +35,6 @@ tick_count dw 0
 timer_handler:
     push ax
     inc word [tick_count]
-    mov dx, 0x3F8
-    mov al, '.'
-    out dx, al
     mov al, 0x20
     out 0x20, al      ; EOI to master PIC
     pop ax
