@@ -12,12 +12,12 @@ start:
     mov cx, 0x0002        ; Start at sector 2
     mov dx, 0x0000        ; Head 0, Drive 0
     mov bx, 0x0000
-    mov es, 0x1000
+    mov es, 0x0800
     int 0x13
 
     jc disk_error         ; Jump if carry set (error)
 
-    jmp 0x1000:0000       ; Jump to kernel
+    jmp 0x0800:0000       ; Jump to kernel
 
 disk_error:
     mov si, err_msg
