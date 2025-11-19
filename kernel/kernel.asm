@@ -167,7 +167,8 @@ syscall_handler:
     mov dl, [boot_drive]   ; use boot drive
     xor dh, dh             ; head 0 for simple case
     mov bx, 0x0000
-    mov es, 0x3000
+    mov ax, 0x3000
+    mov es, ax
     xor ch, ch
     mov cl, al             ; sector number from caller
     mov ax, 0x0201         ; read 1 sector
