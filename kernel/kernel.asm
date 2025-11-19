@@ -1,4 +1,4 @@
-org 0x0000
+joorg 0x0000
 
 start:
     cli
@@ -505,4 +505,5 @@ scancode_table:
 ; -------------------------------
 ; Boot Message
 ; -------------------------------
+boot_drive db 0x00
 msg db "8088/OS Kernel Initialized", 0
