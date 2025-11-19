@@ -14,6 +14,10 @@ start:
     call enable_irq0
     call install_keyboard_handler
     call enable_irq1
+
+    call install_irq_handlers_3_to_7
+    call enable_irq3_to_7
+
     call install_syscall_handler
 
     call load_shell
