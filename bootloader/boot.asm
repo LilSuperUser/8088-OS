@@ -9,10 +9,11 @@ start:
     mov ss, ax
     mov sp, 0x7C00
 
+    mov ax, 0x0800
+    mov es, ax
     mov ax, 0x0202        ; INT 13h: read 2 sectors
     mov cx, 0x0002        
     mov bx, 0x0000
-    mov es, 0x0800
     mov dx, 0x0000
     int 0x13
 
