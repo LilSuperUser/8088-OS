@@ -204,6 +204,7 @@ syscall_handler:
     mov cl, al             ; sector number from caller
     mov ax, 0x0201         ; read 1 sector
     int 0x13
+    jc .disk_error
 
     pop es
     pop dx
@@ -211,6 +212,11 @@ syscall_handler:
     pop bx
     pop ax
     jmp 0x3000:0000
+
+.disk_error:
+    mov si, disk_err_msg
+    call print_string
+    jmp $
 
 .done:
     pop es
