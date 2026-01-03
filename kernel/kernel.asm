@@ -198,7 +198,7 @@ syscall_handler:
     mov dl, [boot_drive]   ; use boot drive
     xor dh, dh             ; head 0 for simple case
     mov bx, 0x0000
-    mov ax, 0x3000
+    mov ax, 0x5000         ; Changed from 0x3000 to 0x5000
     mov es, ax
     xor ch, ch
     mov cl, al             ; sector number from caller
@@ -211,7 +211,7 @@ syscall_handler:
     pop cx
     pop bx
     pop ax
-    jmp 0x3000:0000
+    jmp 0x5000:0000        ; FIXED: Changed from 0x3000:0000 to 0x5000:0000
 
 .disk_error:
     mov si, disk_err_msg
@@ -300,7 +300,7 @@ buffer_get:
 ; -------------------------------
 ; Simple Bump Allocator
 ; -------------------------------
-free_segment dw 0x3000
+free_segment dw 0x3000     ; Heap starts at 0x3000:0000
 free_offset  dw 0x0000
 
 malloc:
