@@ -79,7 +79,7 @@ keyboard_handler:
     mov es, ax
 
     in al, 0x60
-    cmp al, 58
+    cmp al, 0x53
     ja .done
 
     xor ah, ah
@@ -559,10 +559,18 @@ load_shell:
 ; Scancode to ASCII Table
 ; -------------------------------
 scancode_table:
+    ; 0x00-0x0F
     db 0, 27, '1','2','3','4','5','6','7','8','9','0','-','=', 8, 9
+    ; 0x10-0x1F (Q-P, Enter, Ctrl, A-L)
     db 'q','w','e','r','t','y','u','i','o','p','[',']',13, 0,'a','s'
-    db 'd','f','g','h','j','k','l',';',39,'`','\\','z','x','c','v'
-    db 'b','n','m',',','.','/', 0, '*', 0, ' '
+    ; 0x20-0x2F (D-M, Left Shift, \, Z-M)
+    db 'd','f','g','h','j','k','l',';',39,'`', 0,'\\','z','x','c','v'
+    ; 0x30-0x3F (B-/, Right Shift, Keypad *, Alt, Space, Caps, F1-F6)
+    db 'b','n','m',',','.','/', 0, '*', 0, ' ', 0, 0, 0, 0, 0, 0
+    ; 0x40-0x4F (F7-F10, Num Lock, Scroll Lock, Keypad 7-1)
+    db 0, 0, 0, 0, 0, 0, 0, '7', '8', '9', '-', '4', '5', '6', '+', '1'
+    ; 0x50-0x53 (Keypad 2, 3, 0, .)
+    db '2', '3', '0', '.'
 
 ; -------------------------------
 ; Boot Message
