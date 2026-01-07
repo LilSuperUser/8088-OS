@@ -96,6 +96,14 @@ keyboard_handler:
     cmp al, 0x36
     je .right_shift_press
 
+    ; Check for Left Ctrl press (0x1D)
+    cmp al, 0x1D
+    je .left_ctrl_press
+
+    ; Check for Left Alt press (0x38)
+    cmp al, 0x38
+    je .left_alt_press
+
     ; Normal key - check if shift is pressed
     mov cl, [shift_pressed]
     test cl, cl
@@ -128,6 +136,14 @@ keyboard_handler:
     or byte [shift_pressed], 0x02   ; set bit 1
     jmp .done
 
+.left_ctrl_press:
+    or byte [ctrl_pressed], 0x01    ; set bit 0
+    jmp .done
+
+.left_alt_press:
+    or byte [alt_pressed], 0x01     ; set bit 0
+    jmp .done
+
 .key_release:
     ; Remove break bit to get make code
     and al, 0x7F
@@ -140,6 +156,14 @@ keyboard_handler:
     cmp al, 0x36
     je .right_shift_release
 
+    ; Check for Left Ctrl release
+    cmp al, 0x1D
+    je .left_ctrl_release
+
+    ; Check for Left Alt release
+    cmp al, 0x38
+    je .left_alt_release
+
     jmp .done
 
 .left_shift_release:
@@ -148,6 +172,14 @@ keyboard_handler:
 
 .right_shift_release:
     and byte [shift_pressed], 0xFD      ; Clear bit 1
+    jmp .done
+
+.left_ctrl_release:
+    and byte [ctrl_pressed], 0xFE       ; Clear bit 0
+    jmp .done
+
+.left_alt_release:
+    and byte [alt_pressed], 0xFE        ; Clear bit 0
     jmp .done
 
 .done:
