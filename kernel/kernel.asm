@@ -88,6 +88,9 @@ keyboard_handler:
     ; KEY PRESS (make code)
     ; ============================================
 
+    ; Clear AH before any comparisons to avoid contamination
+    xor ah, ah
+
     ; Validate scancode range
     cmp al, 0x53
     ja .done
@@ -122,17 +125,28 @@ keyboard_handler:
     cmp al, 0x19
     jbe .is_letter
 
+    ; Gap: 0x1A-0x1D ([, ], Enter, Ctrl) - NOT letters
+    cmp al, 0x1D
+    jbe .not_letter
+
     ; Check A-L row (scancodes 0x1E-0x26)
     cmp al, 0x1E
     jb .not_letter
     cmp al, 0x26
     jbe .is_letter
 
+    ; Gap: 0x27-0x2B (;, ', `, Left Shift, \) - NOT letters
+    cmp al, 0x2B
+    jbe .not_letter
+
     ; Check Z-M row (scancodes 0x2C-0x32)
     cmp al, 0x2C
     jb .not_letter
     cmp al, 0x32
     jbe .is_letter
+
+    ; Everything else - NOT letters
+    jmp .not_letter
 
     ; ============================================
     ; NOT A LETTER - Only Shift affects it
@@ -148,11 +162,13 @@ keyboard_handler:
     ; IS A LETTER - Apply CapsLock XOR Shift
     ; ============================================
 .is_letter:
-    ; Normalize shift to boolean (0 or 1)
+    ; Normalize shift to boolean
     mov cl, [shift_pressed]
     test cl, cl
-    setnz cl                        ; CL = 1 if any shift pressed, 0 otherwise
+    jz .shift_is_zero
+    mov cl, 1
 
+.shift_is_zero:
     ; XOR with CapsLock state
     xor cl, [caps_lock]             ; CL = Shift XOR CapsLock
 
@@ -162,18 +178,18 @@ keyboard_handler:
     jmp .use_normal_table
 
     ; ============================================
-    ; TABLE SELECTION
+    ; TABLE SELECTION - Use BL only for indexing
     ; ============================================
 .use_normal_table:
-    xor ah, ah
-    mov bx, ax
+    xor bx, bx
+    mov bl, al
     mov si, scancode_table
     mov al, [si + bx]
     jmp .check_valid
 
 .use_shift_table:
-    xor ah, ah
-    mov bx, ax
+    xor bx, bx
+    mov bl, al
     mov si, scancode_table_shift
     mov al, [si + bx]
     jmp .check_valid
@@ -722,35 +738,19 @@ load_shell:
 ; Scancode to ASCII Table
 ; -------------------------------
 scancode_table:
-    ; 0x00-0x0F
-    db 0, 27, '1','2','3','4','5','6','7','8','9','0','-','=', 8, 9
-    ; 0x10-0x1F (Q-P, [, ], Enter, Ctrl, A-L)
-    db 'q','w','e','r','t','y','u','i','o','p','[',']',13, 0,'a','s'
-    ; 0x20-0x2F (D-;, ', `, Left Shift, \, Z-M)
-    db 'd','f','g','h','j','k','l',';',39,'`', 0,'\','z','x','c','v'
-    ; 0x30-0x3F (B-/, Right Shift, Keypad *, Alt, Space, Caps, F1-F6)
-    db 'b','n','m',',','.','/', 0, '*', 0, ' ', 0, 0, 0, 0, 0, 0
-    ; 0x40-0x4F (F7-F10, Num Lock, Scroll Lock, Keypad 7-1)
-    db 0, 0, 0, 0, 0, 0, 0, '7', '8', '9', '-', '4', '5', '6', '+', '1'
-    ; 0x50-0x53 (Keypad 2, 3, 0, .)
-    db '2', '3', '0', '.'
+    db 0, 0, '1','2','3','4','5','6','7','8','9','0','-','=', 8, 0 ; 0x00-0x0F
+    db 'q','w','e','r','t','y','u','i','o','p','[',']', 13, 0,'a','s' ; 0x10-0x1F
+    db 'd','f','g','h','j','k','l',';',39, '`', 0, '\','z','x','c','v' ; 0x20-0x2F
+    db 'b','n','m',',','.','/', 0, 0, 0, ' '                      ; 0x30-0x39
 
 ; -------------------------------
 ; Scancode to ASCII Table (Shifted)
 ; -------------------------------
 scancode_table_shift:
-    ; 0x00-0x0F
-    db 0, 27, '!','@','#','$','%','^','&','*','(',')','_','+', 8, 9
-    ; 0x10-0x1F (Q-P, {, }, Enter, Ctrl, A-L)
-    db 'Q','W','E','R','T','Y','U','I','O','P','{','}',13, 0,'A','S'
-    ; 0x20-0x2F (D-:, ", ~, Left Shift, |, Z-M)
-    db 'D','F','G','H','J','K','L',':','"','~', 0,'|','Z','X','C','V'
-    ; 0x30-0x3F (B-?, Right Shift, Keypad *, Alt, Space, Caps, F1-F6)
-    db 'B','N','M','<','>','?', 0, '*', 0, ' ', 0, 0, 0, 0, 0, 0
-    ; 0x40-0x4F (F7-F10, Num Lock, Scroll Lock, Keypad 7-1)
-    db 0, 0, 0, 0, 0, 0, 0, '7', '8', '9', '-', '4', '5', '6', '+', '1'
-    ; 0x50-0x53 (Keypad 2, 3, 0, .)
-    db '2', '3', '0', '.'
+    db 0, 0, '!','@','#','$','%','^','&','*','(',')','_','+', 8, 0
+    db 'Q','W','E','R','T','Y','U','I','O','P','{','}', 13, 0,'A','S'
+    db 'D','F','G','H','J','K','L',':','"', '~', 0, '|','Z','X','C','V'
+    db 'B','N','M','<','>','?', 0, 0, 0, ' '
 
 ; -------------------------------
 ; Modifier Key State Flags
