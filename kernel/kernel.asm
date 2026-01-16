@@ -78,20 +78,199 @@ keyboard_handler:
     mov ds, ax
     mov es, ax
 
-    in al, 0x60
-    cmp al, 58
+    in al, 0x60                     ; Read scancode from keyboard
+
+    ; Check for break code (key release, bit 7 set)
+    test al, 0x80
+    jnz .key_release
+
+    ; ============================================
+    ; KEY PRESS (make code)
+    ; ============================================
+
+    ; Clear AH before any comparisons to avoid contamination
+    xor ah, ah
+
+    ; Validate scancode range
+    cmp al, 0x53
     ja .done
 
-    xor ah, ah
-    mov bx, ax
+    ; Check for CapsLock toggle (0x3A)
+    cmp al, 0x3A
+    je .caps_lock_press
+
+    ; Check for Left Shift press (0x2A)
+    cmp al, 0x2A
+    je .left_shift_press
+
+    ; Check for Right Shift press (0x36)
+    cmp al, 0x36
+    je .right_shift_press
+
+    ; Check for Left Ctrl press (0x1D)
+    cmp al, 0x1D
+    je .left_ctrl_press
+
+    ; Check for Left Alt press (0x38)
+    cmp al, 0x38
+    je .left_alt_press
+
+    ; ============================================
+    ; NORMAL KEY - Determine if it's a letter
+    ; ============================================
+
+    ; Check Q-P row (scancodes 0x10-0x19)
+    cmp al, 0x10
+    jb .not_letter
+    cmp al, 0x19
+    jbe .is_letter
+
+    ; Gap: 0x1A-0x1D ([, ], Enter, Ctrl) - NOT letters
+    cmp al, 0x1D
+    jbe .not_letter
+
+    ; Check A-L row (scancodes 0x1E-0x26)
+    cmp al, 0x1E
+    jb .not_letter
+    cmp al, 0x26
+    jbe .is_letter
+
+    ; Gap: 0x27-0x2B (;, ', `, Left Shift, \) - NOT letters
+    cmp al, 0x2B
+    jbe .not_letter
+
+    ; Check Z-M row (scancodes 0x2C-0x32)
+    cmp al, 0x2C
+    jb .not_letter
+    cmp al, 0x32
+    jbe .is_letter
+
+    ; Everything else - NOT letters
+    jmp .not_letter
+
+    ; ============================================
+    ; NOT A LETTER - Only Shift affects it
+    ; ============================================
+.not_letter:
+    ; Check if ANY shift is pressed (test bits 0 and 1)
+    mov cl, [shift_pressed]
+    test cl, cl
+    jz .use_normal_table
+    jmp .use_shift_table
+
+    ; ============================================
+    ; IS A LETTER - Apply CapsLock XOR Shift
+    ; ============================================
+.is_letter:
+    ; Normalize shift to boolean
+    mov cl, [shift_pressed]
+    test cl, cl
+    jz .shift_is_zero
+    mov cl, 1
+
+.shift_is_zero:
+    ; XOR with CapsLock state
+    xor cl, [caps_lock]             ; CL = Shift XOR CapsLock
+
+    ; If result is 1, use uppercase; if 0, use lowercase
+    test cl, cl
+    jnz .use_shift_table
+    jmp .use_normal_table
+
+    ; ============================================
+    ; TABLE SELECTION - Use BL only for indexing
+    ; ============================================
+.use_normal_table:
+    xor bx, bx
+    mov bl, al
     mov si, scancode_table
     mov al, [si + bx]
+    jmp .check_valid
+
+.use_shift_table:
+    xor bx, bx
+    mov bl, al
+    mov si, scancode_table_shift
+    mov al, [si + bx]
+    jmp .check_valid
+
+.check_valid:
+    ; Only buffer non-zero characters
     cmp al, 0
     je .done
 
+    ; Clear AH to avoid register contamination
+    xor ah, ah
     call buffer_put
+    jmp .done
+
+    ; ============================================
+    ; MODIFIER KEY PRESSES
+    ; ============================================
+.caps_lock_press:
+    ; Toggle CapsLock state
+    xor byte [caps_lock], 1
+    jmp .done
+
+.left_shift_press:
+    or byte [shift_pressed], 0x01   ; Set bit 0
+    jmp .done
+
+.right_shift_press:
+    or byte [shift_pressed], 0x02   ; Set bit 1
+    jmp .done
+
+.left_ctrl_press:
+    or byte [ctrl_pressed], 0x01    ; Set bit 0
+    jmp .done
+
+.left_alt_press:
+    or byte [alt_pressed], 0x01     ; Set bit 0
+    jmp .done
+
+    ; ============================================
+    ; KEY RELEASE (break code)
+    ; ============================================
+.key_release:
+    ; Remove break bit to get make code
+    and al, 0x7F
+
+    ; Check for Left Shift release
+    cmp al, 0x2A
+    je .left_shift_release
+
+    ; Check for Right Shift release
+    cmp al, 0x36
+    je .right_shift_release
+
+    ; Check for Left Ctrl release
+    cmp al, 0x1D
+    je .left_ctrl_release
+
+    ; Check for Left Alt release
+    cmp al, 0x38
+    je .left_alt_release
+
+    jmp .done
+
+.left_shift_release:
+    and byte [shift_pressed], 0xFE  ; Clear bit 0
+    jmp .done
+
+.right_shift_release:
+    and byte [shift_pressed], 0xFD  ; Clear bit 1
+    jmp .done
+
+.left_ctrl_release:
+    and byte [ctrl_pressed], 0xFE   ; Clear bit 0
+    jmp .done
+
+.left_alt_release:
+    and byte [alt_pressed], 0xFE    ; Clear bit 0
+    jmp .done
 
 .done:
+    ; Send EOI to PIC
     mov al, 0x20
     out 0x20, al
 
@@ -538,7 +717,7 @@ load_shell:
     mov es, ax
     mov ax, 0x0201
     mov bx, 0x0000
-    mov cx, 0x0004
+    mov cx, 0x0005          ; Start reading shell from sector 5
     mov dx, 0x0000
     int 0x13
     jc .error
@@ -559,10 +738,29 @@ load_shell:
 ; Scancode to ASCII Table
 ; -------------------------------
 scancode_table:
-    db 0, 27, '1','2','3','4','5','6','7','8','9','0','-','=', 8, 9
-    db 'q','w','e','r','t','y','u','i','o','p','[',']',13, 0,'a','s'
-    db 'd','f','g','h','j','k','l',';',39,'`','\\','z','x','c','v'
-    db 'b','n','m',',','.','/', 0, '*', 0, ' '
+    db 0, 0, '1','2','3','4','5','6','7','8','9','0','-','=', 8, 0 ; 0x00-0x0F
+    db 'q','w','e','r','t','y','u','i','o','p','[',']', 13, 0,'a','s' ; 0x10-0x1F
+    db 'd','f','g','h','j','k','l',';',39, '`', 0, '\','z','x','c','v' ; 0x20-0x2F
+    db 'b','n','m',',','.','/', 0, 0, 0, ' '                      ; 0x30-0x39
+
+; -------------------------------
+; Scancode to ASCII Table (Shifted)
+; -------------------------------
+scancode_table_shift:
+    db 0, 0, '!','@','#','$','%','^','&','*','(',')','_','+', 8, 0
+    db 'Q','W','E','R','T','Y','U','I','O','P','{','}', 13, 0,'A','S'
+    db 'D','F','G','H','J','K','L',':','"', '~', 0, '|','Z','X','C','V'
+    db 'B','N','M','<','>','?', 0, 0, 0, ' '
+
+; -------------------------------
+; Modifier Key State Flags
+; -------------------------------
+shift_pressed   db 0    ; Bit 0: Left Shift, Bit 1: Right Shift
+ctrl_pressed    db 0    ; Bit 0: Left Ctrl, Bit 1: Right Ctrl (future)
+alt_pressed     db 0    ; Bit 0: Left Alt, Bit 1: Right Alt (future)
+caps_lock       db 0    ; Toggle state
+num_lock        db 0    ; Toggle state
+scroll_lock     db 0    ; Toggle state
 
 ; -------------------------------
 ; Boot Message
